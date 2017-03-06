@@ -1,0 +1,78 @@
+---
+title: "Impacts of weather events in the USA"
+author: "Alexander Florez Rodriguez"
+date: "March 6, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Health and economic impacts of weather events in the USA
+
+the U.S. National Oceanic and Atmospheric Administration's (NOAA) have recorded the characteristics of weather events such as stroms, floods and tornados during the last 66 years. Using this information I estimated the proportion of health and economic impacts for each of the 20 most common weather events in the USA. Of the total of health related impacts, tornados account for 58% of the fatal victims and 73% of the injuries due to weather events in the USA. At the economic level, floods are the cause of the 53% of the economic impacts. For crops, droughts and floods acoounts for the 43% and 17% respectively. 
+
+## Data processing
+```{r cache=T}
+storm <- read.csv("repdata%2Fdata%2FStormData.csv", header = T)
+X <- length(sort(table(grep("THUNDERSTORM", as.character(storm$EVTYPE), value = T)), decreasing=T))
+```
+The information input for the NOAA database is standarized. However, there is not strict control. Therefore, it is possible to find weather events described in diverse forms. For example: the event thunderstorm is found `r X` times, including descriptions as: TSTM WIND, THUNDERSTORM WIND, THUNDERSTORM WINDS, THUNDERSTORM and others. With in the 20 most common events, there were still multiple descriptions for the same weather event, then I substituted the word "TSTM" for "THUNDERSTORM" and "WINDS" for "WIND". Afterwards, I subseted the raw data for only the weather events in the top 20.
+
+```{r}
+storm$EVTYPE <- gsub("TSTM", "THUNDERSTORM", storm$EVTYPE)
+storm$EVTYPE <- gsub("WINDS", "WIND", storm$EVTYPE)
+ev_20 <- sort(table(storm$EVTYPE), decreasing = T)[1:20]
+Ev_20_names <- as.vector(dimnames(ev_20)[[1]])
+storm_20 <- storm[storm$EVTYPE %in% Ev_20_names,]
+W <- paste(round(sum(ev_20)/dim(storm)[1]*100), "%", sep="")
+```
+
+Because inaccurate descriptions are rare, working with the 20 most common weather allowed me to cover most of the events that have occured to date. In total `r dim(storm)[1]` weather events have been recorded since 1950. Of those, the `r W ` correspond to the 20 most common events.
+
+## Results
+
+```{r }
+storm_20_out <- data.frame(matrix(nrow = length(Ev_20_names), ncol = 3))
+colnames(storm_20_out) <- c("EVTYPE", "FAT_percentage", "INJ_percentage")
+storm_20_out$EVTYPE <- Ev_20_names
+tmp_D <- aggregate(storm_20$FATALITIES, list(storm_20$EVTYPE), sum)
+storm_20_out$FAT_percentage <- tmp_D$x[match(storm_20_out$EVTYPE, tmp_D$Group.1)]*100/sum(storm_20$FATALITIES)
+tmp_E <- aggregate(storm_20$INJURIES, list(storm_20$EVTYPE), sum)
+storm_20_out$INJ_percentage <- tmp_E$x[match(storm_20_out$EVTYPE, tmp_E$Group.1)]*100/sum(storm_20$INJURIES)
+par(mar=c(10,5,3,3))
+bp <- barplot(rbind(storm_20_out$INJ_percentage,storm_20_out$FAT_percentage),
+        col=c("#838B8B", "#EE7600"), border = F, beside=T)
+mtext(side = 2, "percentage of total health impact", line=3)
+text(bp[seq(1,length(bp), 2)]+0.5, par('usr')[3], labels = Ev_20_names, srt = 60, adj = c(1.1,1.1), xpd = TRUE, cex=.7)
+par(srt=0)
+legend("topright", c("Injuries", "Fatalities"), fill=c("#838B8B", "#EE7600"), border = F, bty = "n")
+```
+
+```{r}
+storm_20$PROPDMGEXP <- toupper(storm_20$PROPDMGEXP)
+storm_20$CROPDMGEXP <- toupper(storm_20$CROPDMGEXP)
+storm_20_econo <- data.frame(matrix(nrow = length(Ev_20_names), ncol = 3))
+colnames(storm_20_econo) <- c("EVTYPE", "Prop_percentage", "crop_percentage")
+storm_20_econo$EVTYPE <- Ev_20_names
+valid_exp <- c("B", "M", "K", "H")
+number_exp <- c(1000000000, 1000000, 1000, 100)
+storm_20_valid_prop <- storm_20[storm_20$PROPDMGEXP %in% valid_exp,]
+total_prop <- storm_20_valid_prop$PROPDMG*number_exp[match(storm_20_valid_prop$PROPDMGEXP, valid_exp)]
+storm_20_valid_prop$total_prop <- total_prop
+tmp_P <- aggregate(storm_20_valid_prop$total_prop, list(storm_20_valid_prop$EVTYPE), sum)
+storm_20_econo$Prop_percentage <- tmp_P$x[match(storm_20_econo$EVTYPE, tmp_D$Group.1)]*100/sum(storm_20_valid_prop$total_prop)
+storm_20_valid_crop <- storm_20[storm_20$CROPDMGEXP %in% valid_exp,]
+total_crop <- storm_20_valid_crop$CROPDMG*number_exp[match(storm_20_valid_crop$CROPDMGEXP, valid_exp)]
+storm_20_valid_crop$total_crop <- total_crop
+tmp_Cr <- aggregate(storm_20_valid_crop$total_crop, list(storm_20_valid_crop$EVTYPE), sum)
+storm_20_econo$Crop_percentage <- tmp_Cr$x[match(storm_20_econo$EVTYPE, tmp_Cr$Group.1)]*100/sum(storm_20_valid_crop$total_crop)
+par(mar=c(10,5,3,3))
+bp <- barplot(rbind(storm_20_econo$Prop_percentage,storm_20_econo$Crop_percentage),
+              col=c("#8B7355", "#556B2F"), border = F, beside=T)
+mtext(side = 2, "percentage of total economic impact", line=3)
+text(bp[seq(1,length(bp), 2)]+0.5, par('usr')[3], labels = Ev_20_names, srt = 60, adj = c(1.1,1.1), xpd = TRUE, cex=.7)
+par(srt=0)
+legend("topright", c("Properties", "Crops"), fill=c("#8B7355", "#556B2F"), border = F, bty = "n")
+```
